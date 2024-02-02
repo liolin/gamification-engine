@@ -6,10 +6,12 @@ module MyLib ( run
              , goal1
              , action1
              , startDb
+             , dbStates
              ) where
 
 -- import Data.UUID (UUID)
 import GHC.Generics
+import Data.Maybe (isNothing, fromJust)
 
 -- type ID = UUID
 type ID = Int
@@ -21,7 +23,8 @@ type ActionID = ID
 
 data DataType = DString String
               | DInt Int
-              | DArray DataType
+              | DArray [DataType]
+              | DMap [(String, DataType)]
               deriving (Show)
 
 data CompareOperator = In
@@ -32,8 +35,9 @@ data CompareOperator = In
                      | LessEqual
                      deriving (Show)
 
-data ActionOperation = Increment Int          -- Decrement is just Increment with a negative value
-                     | Append DataType        -- Append `v` to the array
+data ActionOperation = Increment Int             -- Decrement is just Increment with a negative value
+                     | Append DataType           -- Append `DataType` to the array
+                     | Insert (String, DataType) -- Insert `DataType` with key `String` into the map
                      deriving (Show)
 
 data User = User
@@ -51,7 +55,7 @@ data State = State
   { stateId :: StateID
   , stateVariableId :: VariableID
   , stateUserId :: UserID
-  , stateState :: DataType  -- Must be the same as variableType, how to enforce this?
+  , stateState :: DataType                       -- Must be the same as variableType, how to enforce this?
   } deriving (Show)
 
 data Goal = Goal
@@ -104,7 +108,7 @@ data DB = DB
         , dbUsers :: [User]
         , dbStates :: [State]
         , dbActions :: [Action]
-        }
+        } deriving (Show)
 
 
 startDb :: DB
@@ -148,5 +152,21 @@ getState d v u | null ss = createEmptyState v u
 
 
 
-run :: DB -> User -> Variable -> Action -> Maybe State
-run db u v = applyAction (getState db v u)
+run :: DB -> User -> Variable -> Action -> DB
+run db u v a | isNothing ms = db
+             | otherwise = db { dbStates = upsert id stateId (fromJust ms) (dbStates db) }
+  where
+    ms = applyAction (getState db v u) a
+    id = stateId $ fromJust ms
+
+
+update :: ID -> (a -> ID) -> a -> [a] -> [a]
+update i f new = fmap (\y -> if f y == i then new else y)
+
+
+upsert :: ID -> (a -> ID) -> a -> [a] -> [a]
+upsert i f new xs | null find = new : xs
+                  | otherwise = updated
+  where
+    find = filter (\y -> f y == i) xs
+    updated = update i f new xs
