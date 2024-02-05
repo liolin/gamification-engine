@@ -19,6 +19,7 @@ type UserID = ID
 type VariableID = ID
 type StateID = ID
 type GoalID = ID
+type RewardID = ID
 type ActionID = ID
 
 data DataType = DString String
@@ -64,6 +65,15 @@ data Goal = Goal
   , goalRequired :: DataType
   , goalOperator :: CompareOperator
   } deriving (Generic, Show)
+
+
+data RewardType = Point Int
+                deriving (Show)
+
+data Reward = Reward
+  { rewardId :: RewardID
+  , rewardType :: RewardType
+  } deriving (Show)
 
 data Action = Action
   { actionId :: ActionID
@@ -154,10 +164,10 @@ getState d v u | null ss = createEmptyState v u
 
 run :: DB -> User -> Variable -> Action -> DB
 run db u v a | isNothing ms = db
-             | otherwise = db { dbStates = upsert id stateId (fromJust ms) (dbStates db) }
+             | otherwise = db { dbStates = upsert id' stateId (fromJust ms) (dbStates db) }  -- `fromJust` is save because `ms` is always `Just`
   where
     ms = applyAction (getState db v u) a
-    id = stateId $ fromJust ms
+    id' = stateId $ fromJust ms  -- Is this safe?
 
 
 update :: ID -> (a -> ID) -> a -> [a] -> [a]
